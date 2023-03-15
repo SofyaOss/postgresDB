@@ -9,24 +9,17 @@ type Storage struct {
 	db *pgxpool.Pool
 }
 
-func (s *Storage) Tasks(taskID, authorID int) ([]Task, error) {
+func NewDb(ConnString string) (*Storage, error) {
+	db, err := pgxpool.Connect(context.Background(), ConnString)
+	if err != nil {
+		return nil, err
+	}
+	return &Storage{db: db}, nil
+}
+
+func (s *Storage) AllTasks() ([]Task, error) {
 	rows, err := s.db.Query(context.Background(), `
-		SELECT 
-			id,
-			opened,
-			closed,
-			author_id,
-			assigned_id,
-			title,
-			content
-		FROM tasks
-		WHERE
-			($1 = 0 OR id = $1) AND
-			($2 = 0 OR author_id = $2)
-		ORDER BY id;
-	`,
-		taskID,
-		authorID,
+		SELECT * FROM tasks ORDER BY id;`,
 	)
 	if err != nil {
 		return nil, err
@@ -54,6 +47,54 @@ func (s *Storage) Tasks(taskID, authorID int) ([]Task, error) {
 	}
 	// ВАЖНО не забыть проверить rows.Err()
 	return tasks, rows.Err()
+}
+
+func (s *Storage) TasksAuthor(id int) ([]Task, error) {
+	var tasksList []Task
+	rows, err := s.db.Query(context.Background(), `SELECT * FROM tasks WHERE author_id = $1;`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var t Task
+		err = rows.Scan(&t.Id, &t.Opened, &t.Closed, &t.AuthorId,
+			&t.AssignedId, &t.Title, &t.Content)
+		if err != nil {
+			return nil, err
+		}
+		tasksList = append(tasksList, t)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return tasksList, nil
+}
+
+func (s *Storage) TasksLabel(label string) ([]Task, error) {
+	var tasksList []Task
+	rows, err := s.db.Query(context.Background(), `SELECT * FROM tasks_labels
+	join tasks ON tasks.id = tasks_labels.task_id
+	join labels ON tasks_labels.label_id = labels.id and labels.name = $1;`, label)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var t Task
+		err = rows.Scan(&t.Id, &t.Opened, &t.Closed, &t.AuthorId,
+			&t.AssignedId, &t.Title, &t.Content)
+		if err != nil {
+			return nil, err
+		}
+		tasksList = append(tasksList, t)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return tasksList, nil
 }
 
 // NewTask создаёт новую задачу и возвращает её id.

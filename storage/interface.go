@@ -2,9 +2,11 @@ package storage
 
 type InterfaceDB interface {
 	NewTask(t Task) (int, error)
-	Tasks(taskID, authorID int) ([]Task, error)
-	UpdateTask(id int, task Task) (int, error)
-	RmTaskId(id int) (int, error)
+	AllTasks() ([]Task, error)
+	UpdateTask(id int, title, content string) error
+	RmTask(id int) error
+	TasksAuthor(id int) ([]Task, error)
+	TasksLabel(label string) ([]Task, error)
 }
 
 type User struct {
